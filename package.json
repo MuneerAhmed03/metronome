@@ -13,9 +13,23 @@
     "cf-typegen": "wrangler types --env-interface CloudflareEnv env.d.ts"
   },
   "dependencies": {
+    "@ai-sdk/groq": "^1.0.12",
+    "@radix-ui/react-slot": "^1.1.1",
+    "ai": "^4.0.39",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "form-data": "^4.0.1",
+    "html-react-parser": "^5.2.2",
+    "lucide-react": "^0.471.1",
     "next": "15.1.4",
+    "openai": "^4.78.1",
+    "openai-edge": "^1.2.2",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-markdown": "^9.0.3",
+    "tailwind-merge": "^2.6.0",
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@cloudflare/next-on-pages": "1",
