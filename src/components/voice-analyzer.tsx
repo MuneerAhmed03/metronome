@@ -35,7 +35,6 @@ export default function VoiceAnalyzer() {
   const [isOpen, setIsOpen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
-  const [showPlayer, setShowPlayer] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -57,7 +56,6 @@ export default function VoiceAnalyzer() {
       setAudioBlob(null);
       setAudioUrl(null);
       setIsPlaying(false);
-      setShowPlayer(false);
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -87,7 +85,6 @@ export default function VoiceAnalyzer() {
       };
 
       mediaRecorder.onstop = () => {
-        console.log("from on stop", recordingTimeRef.current);
         const audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
         setAudioBlob(audioBlob);
         setAudioUrl(URL.createObjectURL(audioBlob));
@@ -108,7 +105,6 @@ export default function VoiceAnalyzer() {
         setRecordingTime((prev) => {
           const newTime = prev + 1;
           recordingTimeRef.current = newTime;
-          console.log(newTime);
           return newTime;
         });
       }, 1000);
@@ -135,6 +131,7 @@ export default function VoiceAnalyzer() {
       );
     }
   };
+
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
@@ -162,7 +159,7 @@ export default function VoiceAnalyzer() {
       }
 
       const data = await response.json();
-      //@ts-expect-error
+      //@ts-ignore
       setFeedback(data);
       setIsOpen(true);
       setError(null);
@@ -183,7 +180,6 @@ export default function VoiceAnalyzer() {
     setError(null);
     setIsOpen(false);
     setIsPlaying(false);
-    setShowPlayer(false);
 
     if (mediaRecorderRef.current && isRecording) {
       stopRecording();
@@ -196,7 +192,6 @@ export default function VoiceAnalyzer() {
         audioRef.current.pause();
       } else {
         audioRef.current.play();
-        setShowPlayer(true);
       }
       setIsPlaying(!isPlaying);
     }
@@ -210,22 +205,32 @@ export default function VoiceAnalyzer() {
     }
   };
 
-  const playRecording = () => {
-    if (audioUrl) {
-      const audio = new Audio(audioUrl);
-      audio.play();
+  useEffect(() => {
+    const audioElement = audioRef.current;
+    const handleTimeUpdate = () => {
+      if (audioElement) {
+        setAudioProgress(audioElement.currentTime);
+      }
+    };
+
+    if (audioElement) {
+      audioElement.addEventListener("timeupdate", handleTimeUpdate);
     }
-  };
+
+    return () => {
+      if (audioElement) {
+        audioElement.removeEventListener("timeupdate", handleTimeUpdate);
+      }
+    };
+  }, [audioUrl]);
 
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.addEventListener("timeupdate", () => {
-        if (audioRef.current) {
-          setAudioProgress(audioRef.current.currentTime);
-        }
-      });
-    }
-  }, [audioUrl]);
+    return () => {
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, []);
 
   return (
     <div className="min-h-screen">
@@ -309,11 +314,17 @@ export default function VoiceAnalyzer() {
               {audioUrl && !isAnalyzing && (
                 <div className="flex gap-4">
                   <button
-                    onClick={playRecording}
+                    onClick={togglePlayPause}
                     className="flex items-center gap-2 px-4 py-3 sm:px-6 text-sm font-medium text-white bg-indigo-500/10 hover:bg-indigo-500/20 rounded-full transition-colors border border-indigo-400/20"
                   >
-                    <Play className="w-5 h-5 sm:w-4 sm:h-4" />
-                    <span className="hidden sm:inline">Play Recording</span>
+                    {isPlaying ? (
+                      <Pause className="w-5 h-5 sm:w-4 sm:h-4" />
+                    ) : (
+                      <Play className="w-5 h-5 sm:w-4 sm:h-4" />
+                    )}
+                    <span className="hidden sm:inline">
+                      {isPlaying ? "Pause" : "Play Recording"}
+                    </span>
                   </button>
                   <button
                     onClick={handleReset}
@@ -360,6 +371,8 @@ export default function VoiceAnalyzer() {
           </div>
         </>
       )}
+
+      <audio ref={audioRef} src={audioUrl || undefined} />
     </div>
   );
 }

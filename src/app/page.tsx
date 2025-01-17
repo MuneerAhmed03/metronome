@@ -12,7 +12,7 @@ export default function Home() {
             <MicIcon className="h-12 w-12 text-indigo-400" />
           </div>
           <h1 className="text-4xl font-bold tracking-tight mb-8 text-white">
-            Cadence
+          Rhetronome
           </h1>
           <p className="text-lg text-slate-400 max-w-2xl mx-auto">
             Your personal AI voice instructor that helps you improve your
