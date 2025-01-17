@@ -1,19 +1,27 @@
-import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { NextResponse } from "next/server";
+import OpenAI from "openai";
+import { createOpenAI } from "@ai-sdk/openai";
+import { generateText, generateObject } from "ai";
+import { speechAnalysisSchema, SpeechAnalysis } from "@/models/response.schema";
+
+export const runtime = "edge";
 
 const openaiSpeach = new OpenAI({
   baseURL: "https://api.groq.com/openai/v1/",
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Helper to calculate words per minute
+const groq = createOpenAI({
+  baseURL: "https://api.groq.com/openai/v1",
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
 function calculateWPM(text: string, durationInSeconds: number): number {
   const words = text.trim().split(/\s+/).length;
   const minutes = durationInSeconds / 60;
   return Math.round(words / minutes);
 }
 
-// Helper to analyze pauses and rhythm
 function analyzePauses(segments: any[]): {
   totalPauses: number;
   averagePauseDuration: number;
@@ -28,13 +36,13 @@ function analyzePauses(segments: any[]): {
     const nextSegment = segments[i + 1];
     const pauseDuration = nextSegment.start - currentSegment.end;
 
-    if (pauseDuration > 0.2) { // pause threshold of 200ms
-      console.log("pause increased")
+    if (pauseDuration > 0.2) {
+      console.log("pause increased");
       totalPauses++;
       totalPauseDuration += pauseDuration;
-      if (pauseDuration > 1.0) { // long pause threshold of 1 second
+      if (pauseDuration > 1.0) {
         longPauses++;
-        console.log("long pause increased")
+        console.log("long pause increased");
       }
     }
   }
@@ -49,26 +57,28 @@ function analyzePauses(segments: any[]): {
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    const audioFile = formData.get('audio') as File;
+    const audioFile = formData.get("audio") as File;
 
     if (!audioFile) {
       return NextResponse.json(
-        { error: 'No audio file provided' },
-        { status: 400 }
+        { error: "No audio file provided" },
+        { status: 400 },
       );
     }
 
     const transcription = await openaiSpeach.audio.transcriptions.create({
-      file: audioFile, // Pass the Readable stream directly
-      model: 'whisper-large-v3',
-      response_format: 'verbose_json',
+      file: audioFile,
+      model: "whisper-large-v3",
+      response_format: "verbose_json",
     });
 
     console.log(transcription);
 
-    // Calculate speech metrics
     //@ts-ignore
-    const totalDuration = transcription.segments.reduce((acc, segment) => acc + (segment.end - segment.start), 0);
+    const totalDuration = transcription.segments.reduce(
+      (acc, segment) => acc + (segment.end - segment.start),
+      0,
+    );
     const wpm = calculateWPM(transcription.text, totalDuration);
     //@ts-ignore
     const pauseAnalysis = analyzePauses(transcription.segments);
@@ -84,66 +94,46 @@ export async function POST(request: Request) {
     Transcription: ${transcription.text}
     
     Segment-level text and timings:
-    ${//@ts-ignore
-          transcription.segments.map(segment =>
-            `[${segment.start.toFixed(2)}s - ${segment.end.toFixed(2)}s]: ${segment.text}`
-          ).join('\n')}
+    ${
+      //@ts-ignore
+      transcription.segments
+        .map(
+          (segment) =>
+            `[${segment.start.toFixed(2)}s - ${segment.end.toFixed(2)}s]: ${segment.text}`,
+        )
+        .join("\n")
+    }
     
-    Please analyze the speech delivery and language use, and provide neutral feedback of the speech delivery and language use while Avoiding over-praising ans sticking to factual observations.in the following structured format:
+    Please analyze the speech delivery and language use, and provide neutral feedback of the speech delivery and language use while avoiding over-praising and sticking to factual observations. Structure your response as follows:
 
-    **1. Areas for Improvement**
-    - Identify 2-3 specific areas where the speaker can improve their delivery (e.g., clarity, pace, rhythm, articulation, etc.).
-    - Identify 2-3 specific areas where the speaker can improve their language use (e.g., repetitive words, vague phrasing, sentence structure, etc.).
-    
-    **2. Detailed Feedback**
-    * **Clarity and Articulation:***
-      - Comment on pronunciation and enunciation, pinpointing specific segments where clarity could be improved.
-      - Suggest exercises to improve articulation (e.g., tongue twisters, slow reading practice).
-    * **Pace and Rhythm:**
-      - Evaluate the speaking rate (${wpm} WPM) and whether it suits the context.
-      - Comment on the use of pauses and rhythm, highlighting specific segments where pacing could be adjusted.
-    * **Confidence and Delivery:**
-      - Assess the speaker's tone and delivery, noting any areas where confidence could be improved.
-      - Provide tips to sound more confident and engaging.
-    * **Language Use:**
-      - Evaluate word choice, sentence structure, and overall linguistic effectiveness.
-      - Highlight repetitive words or phrases and suggest alternatives. IF ANY
-      - Identify vague or unclear phrasing and provide suggestions for improvement.
-    
-    **3. Recommendations**
-    - Provide 3-5 actionable recommendations for improving speech delivery. IF REQUIRED
-    - Provide 1-2 actionable recommendations for improving language use. IF REQUIRED
-    - Include specific exercises or techniques.
-    - Keep the tone neutral and professional.
-    
-    **4. Key Takeaways
-    - Summarize the main points of the analysis in 2-3 sentences.
-    - Maintain a neutral tone, avoiding unnecessary praise or criticism.
-    
-    Write the response in a neutral, professional, and approachable tone. Address the user directly using words like "you" and "your." Avoid over-praising. Focus on providing objective, constructive, and actionable feedback. Avoid commenting on the topic of the speech—focus solely on delivery, verbal choices, and language use. Use bullet points for clarity and readability. Respond with proper Markdown syntax.
-    `;
-    
+    1. Areas for Improvement:
+       - Delivery: List 2-3 specific areas where the speaker can improve their delivery.
+       - Language Use: List 2-3 specific areas where the speaker can improve their language use.
 
-const openai = new OpenAI({
-      baseURL: "https://api.groq.com/openai/v1/",
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-    const completion = await openai.chat.completions.create({
-      model: 'llama-3.1-8b-instant',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert speech coach specializing in voice analysis and improvement.',
-        },
-        {
-          role: 'user',
-          content: analysisPrompt,
-        },
-      ],
+    2. Detailed Feedback:
+       - Clarity and Articulation: Comment on pronunciation, enunciation, and provide suggestions for improvement.
+       - Pace and Rhythm: Evaluate the speaking rate and use of pauses.
+       - Confidence and Delivery: Assess the speaker's tone and provide tips for improvement.
+       - Language Use: Evaluate word choice, sentence structure, and overall linguistic effectiveness.
+
+    3. Recommendations:
+       - Delivery: Provide 3-5 actionable recommendations for improving speech delivery.
+       - Language Use: Provide 1-2 actionable recommendations for improving language use.
+
+    4. Key Takeaways: Summarize the main points of the analysis in 2-3 sentences.
+
+    Ensure your response follows this structure exactly, as it will be parsed into a specific format.
+
+     Write the response in a neutral, professional, and approachable tone. Address the user directly using words like "you" and "your." Avoid over-praising. Focus on providing objective, constructive, and actionable feedback. Avoid commenting on the topic of the speech—focus solely on delivery, verbal choices, and language use.
+  `;
+    const { object } = await generateObject<SpeechAnalysis>({
+      model: groq("llama-3.1-70b-versatile"),
+      schema: speechAnalysisSchema,
+      prompt: analysisPrompt,
     });
 
     return NextResponse.json({
-      feedback: completion.choices[0].message.content,
+      speechAnalysis: object,
       metrics: {
         duration: totalDuration,
         wpm,
@@ -151,10 +141,10 @@ const openai = new OpenAI({
       },
     });
   } catch (error) {
-    console.error('Error analyzing speech:', error);
+    console.error("Error analyzing speech:", error);
     return NextResponse.json(
-      { error: 'Failed to analyze speech' },
-      { status: 500 }
+      { error: "Failed to analyze speech" },
+      { status: 500 },
     );
   }
 }
